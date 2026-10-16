@@ -3,6 +3,11 @@ from bs4 import BeautifulSoup
 import json
 import os
 import time
+import smtplib
+import ssl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 
 ACCOUNTS = [
     {"name": "南京招聘汇", "query": "南京招聘汇"},
@@ -31,28 +36,50 @@ def fetch_latest(query):
     return {"title": title, "link": link}
 
 def push_wechat(title, link, source):
-    webhook = os.environ.get("WEIXIN_WEBHOOK", "")
-    if not webhook:
-        print("⚠️ 未配置 WEIXIN_WEBHOOK，跳过推送")
+    """通过 QQ 邮箱发送通知"""
+    sender = os.environ.get("QQ_EMAIL", "")
+    auth_code = os.environ.get("QQ_AUTH_CODE", "")
+    receiver = os.environ.get("QQ_EMAIL", "")  # 发给自己
+    
+    if not sender or not auth_code:
+        print("⚠️ 未配置 QQ_EMAIL 或 QQ_AUTH_CODE，跳过推送")
         return
-
-    content = (
-        f"## 📢 {source} 新文章\n"
-        f"> 标题：**{title}**\n"
-        f"> 来源：{source}\n\n"
-        f"[点击查看原文]({link})\n\n"
-        f"<font color=\"comment\">复制内容发到你公众号即可</font>"
-    )
-    data = {
-        "msgtype": "markdown",
-        "markdown": {"content": content}
-    }
-    r = requests.post(webhook, json=data, timeout=10)
-    # 企微返回 {"errcode":0,"errmsg":"ok"}
-    if r.json().get("errcode") == 0:
-        print(f"✅ 推送成功: {title}")
-    else:
-        print(f"❌ 推送失败: {r.text}")
+    
+    # 构造邮件
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"📢 {source} 新文章：{title}"
+    msg["From"] = sender
+    msg["To"] = receiver
+    
+    # 纯文本版
+    text = f"来源：{source}\n标题：{title}\n链接：{link}\n\n复制链接到浏览器打开，内容可直接搬运到你的公众号。"
+    
+    # HTML版
+    html = f"""
+    <html>
+    <body>
+        <h2>📢 {source} 发了新文章</h2>
+        <p><b>标题：</b>{title}</p>
+        <p><b>来源：</b>{source}</p>
+        <p><a href="{link}">👉 点击查看原文</a></p>
+        <hr>
+        <p style="color:#999;font-size:12px;">复制链接到浏览器打开，内容可直接搬运到你的公众号</p>
+    </body>
+    </html>
+    """
+    
+    msg.attach(MIMEText(text, "plain", "utf-8"))
+    msg.attach(MIMEText(html, "html", "utf-8"))
+    
+    # 发送
+    try:
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.qq.com", 465, context=context) as server:
+            server.login(sender, auth_code)
+            server.sendmail(sender, receiver, msg.as_string())
+        print(f"✅ 邮件推送成功: {title}")
+    except Exception as e:
+        print(f"❌ 邮件推送失败: {e}")
 
 def main():
     seen = load_seen()
