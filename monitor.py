@@ -31,24 +31,28 @@ def fetch_latest(query):
     return {"title": title, "link": link}
 
 def push_wechat(title, link, source):
-    PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN", "")
-    if not PUSHPLUS_TOKEN:
-        print("⚠️ 未配置 PUSHPLUS_TOKEN，跳过推送")
+    webhook = os.environ.get("WEIXIN_WEBHOOK", "")
+    if not webhook:
+        print("⚠️ 未配置 WEIXIN_WEBHOOK，跳过推送")
         return
-    
-    url = "http://www.pushplus.plus/send"
+
+    content = (
+        f"## 📢 {source} 新文章\n"
+        f"> 标题：**{title}**\n"
+        f"> 来源：{source}\n\n"
+        f"[点击查看原文]({link})\n\n"
+        f"<font color=\"comment\">复制内容发到你公众号即可</font>"
+    )
     data = {
-        "token": PUSHPLUS_TOKEN,
-        "title": f"📢 {source} 新文章",
-        "content": f"<h3>{title}</h3><p>来源：{source}</p><p>链接：<a href='{link}'>{link}</a></p><p><small>复制链接到浏览器打开，内容可直接搬运到你的公众号</small></p>",
-        "template": "html",
+        "msgtype": "markdown",
+        "markdown": {"content": content}
     }
-    r = requests.post(url, json=data, timeout=10)
-    result = r.json()
-    if result.get("code") == 200:
+    r = requests.post(webhook, json=data, timeout=10)
+    # 企微返回 {"errcode":0,"errmsg":"ok"}
+    if r.json().get("errcode") == 0:
         print(f"✅ 推送成功: {title}")
     else:
-        print(f"❌ 推送失败: {result}")
+        print(f"❌ 推送失败: {r.text}")
 
 def main():
     seen = load_seen()
