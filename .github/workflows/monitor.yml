@@ -22,5 +22,6 @@ jobs:
 
       - name: Run monitor
         env:
-          WEIXIN_WEBHOOK: ${{ secrets.WEIXIN_WEBHOOK }}
+          QQ_EMAIL: ${{ secrets.QQ_EMAIL }}
+          QQ_AUTH_CODE: ${{ secrets.QQ_AUTH_CODE }}
         run: python monitor.py
